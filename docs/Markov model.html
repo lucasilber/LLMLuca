@@ -1,0 +1,154 @@
+<!doctype html>
+<notebook theme="air">
+  <title>Untitled</title>
+  <script id="19" type="module" pinned="">
+    // Simple but interesting text data for the Markov model
+    const sampleText = `
+    The cat sat on the mat. The dog ran in the park. The bird flew over the house.
+    I love pizza with cheese. You love pasta with sauce. We love food with friends.
+    The sun rises in the morning. The moon shines at night. The stars twinkle in the sky.
+    Books are full of stories. Stories are full of magic. Magic is full of wonder.
+    Coffee tastes good in the morning. Tea tastes good in the afternoon. Water tastes good anytime.
+    Cars drive on the road. Bikes ride on the path. People walk on the sidewalk.
+    Music makes me happy. Dancing makes me smile. Singing makes me feel alive.
+    The ocean is deep and blue. The forest is green and quiet. The mountain is tall and strong.
+    Children play in the playground. Adults work in the office. Everyone sleeps at home.
+    Rain falls from the clouds. Snow falls in winter. Leaves fall in autumn.
+    Flowers bloom in spring. Fruits grow in summer. Trees change in fall.
+    Friends laugh together. Families eat together. Neighbors help each other.
+    The phone rings loudly. The clock ticks quietly. The doorbell chimes softly.
+    Ice cream is cold and sweet. Soup is warm and tasty. Bread is soft and fresh.
+    Dogs bark at strangers. Cats purr when happy. Birds sing in the morning.
+    The library has many books. The park has green grass. The store has good food.
+    Students learn new things. Teachers share their knowledge. Parents give their love.
+    The beach has soft sand. The lake has calm water. The river flows to the sea.
+    Computers help us work. Phones help us talk. Cars help us travel.
+    Yesterday was sunny. Today is cloudy. Tomorrow might rain.
+    `;
+  </script>
+  <script id="20" type="module" pinned="">
+    // Markov Chain Language Model class
+    class MarkovModel {
+      constructor(text, order = 2) {
+        this.order = order;
+        this.chains = new Map();
+        this.train(text);
+      }
+
+      // Clean and tokenize text
+      tokenize(text) {
+        return text.toLowerCase()
+          .replace(/[^\w\s\.!?]/g, '')
+          .split(/\s+/)
+          .filter(word => word.length > 0);
+      }
+
+      // Train the model on the provided text
+      train(text) {
+        const tokens = this.tokenize(text);
+
+        for (let i = 0; i <= tokens.length - this.order - 1; i++) {
+          const key = tokens.slice(i, i + this.order).join(' ');
+          const nextWord = tokens[i + this.order];
+
+          if (!this.chains.has(key)) {
+            this.chains.set(key, []);
+          }
+          this.chains.get(key).push(nextWord);
+        }
+      }
+
+      // Generate text of specified length
+      generate(length = 50) {
+        if (this.chains.size === 0) return "No training data available.";
+
+        // Start with a random key
+        const keys = Array.from(this.chains.keys());
+        let currentKey = keys[Math.floor(Math.random() * keys.length)];
+        let result = currentKey.split(' ');
+
+        for (let i = 0; i < length - this.order; i++) {
+          const possibleWords = this.chains.get(currentKey);
+          if (!possibleWords || possibleWords.length === 0) break;
+
+          // Randomly select next word
+          const nextWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
+          result.push(nextWord);
+
+          // Update current key for next iteration
+          const keyWords = currentKey.split(' ');
+          keyWords.shift();
+          keyWords.push(nextWord);
+          currentKey = keyWords.join(' ');
+
+          if (!this.chains.has(currentKey)) break;
+        }
+
+        return result.join(' ');
+      }
+    }
+  </script>
+  <script id="21" type="module" pinned="">
+    // Create input controls for the Markov model
+    const orderInput = view(Inputs.range([1, 5], {
+      label: "Order (n-gram size)",
+      value: 2,
+      step: 1
+    }));
+
+    const lengthInput = view(Inputs.range([10, 200], {
+      label: "Generated text length (words)",
+      value: 50,
+      step: 5
+    }));
+
+    const generateButton = view(Inputs.button("Generate Text"));
+  </script>
+  <script id="22" type="module" pinned="">
+    // Create and use the Markov model
+    let model = new MarkovModel(sampleText, orderInput);
+    let generatedText = "";
+
+    // Regenerate model when order changes
+    if (orderInput !== undefined) {
+      model = new MarkovModel(sampleText, orderInput);
+    }
+
+    // Generate text when button is clicked or parameters change
+    if (generateButton !== undefined || lengthInput !== undefined) {
+      generatedText = model.generate(lengthInput);
+    }
+
+    display(htl.html`
+      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 10px 0;">
+        <h3>Generated Text:</h3>
+        <p style="font-style: italic; line-height: 1.6; color: #333;">
+          ${generatedText}
+        </p>
+      </div>
+    `);
+  </script>
+  <script id="23" type="text/markdown">
+    ## How the Markov Language Model Works
+
+    This Markov Language Model generates text by learning patterns from sample text and then creating new sentences based on those patterns. Here's how it works:
+
+    **Key Concepts:**
+    - **Order (n-gram size)**: Determines how many consecutive words the model considers when predicting the next word. Higher order = more context but potentially less creativity.
+    - **Training**: The model analyzes the sample text and builds a map of word sequences to possible next words.
+    - **Generation**: Starting with a random sequence, it repeatedly predicts the next word based on the current context.
+
+    **Parameters:**
+    - **Order 1**: Each word depends only on the previous word (bigrams)
+    - **Order 2**: Each word depends on the previous two words (trigrams) - good balance
+    - **Order 3+**: More context but may reproduce original text more closely
+
+    **Use Cases:**
+    - Text generation for creative writing
+    - Chatbot responses
+    - Data augmentation for NLP tasks
+    - Understanding language patterns
+
+    Try adjusting the order and length parameters to see how they affect the generated text quality and creativity!
+  </script>
+</notebook>
