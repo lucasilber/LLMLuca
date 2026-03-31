@@ -1,4 +1,3 @@
-// Paste this entire block into a single Observable cell
 
 async function poemCell() {
   // ── container ──────────────────────────────────────────────────────────────
