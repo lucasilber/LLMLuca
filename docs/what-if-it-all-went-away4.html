@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What If It All Went Away</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html { background:#080810; }
+
+body {
+  background:#080810;
+  overflow:hidden;
+  width:100vw;
+  height:100vh;
+}
+
+#stage {
+  position:relative;
+  width:100vw;
+  height:100vh;
+  overflow:hidden;
+  background:#080810;
+}
+
+canvas {
+  position:absolute;
+  top:0; left:0;
+  width:100%; height:100%;
+  display:block;
+}
+
+#bg  { z-index:1; }
+#fx  { z-index:2; pointer-events:none; }
+
+#poem {
+  position:absolute;
+  top:0; left:0;
+  width:100%; height:100%;
+  z-index:3;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.line-wrap {
+  position:absolute;
+  width:100%;
+  text-align:center;
+  top:50%;
+  left:0;
+  transform:translateY(-50%);
+  padding:0 48px;
+}
+
+.poem-line {
+  display:inline-block;
+  font-family:Georgia, 'Times New Roman', serif;
+  font-size:clamp(20px, 3vw, 38px);
+  font-weight:normal;
+  letter-spacing:0.05em;
+  line-height:1.6;
+  color:#f2ede4;
+  opacity:0;
+  transform:translateY(14px);
+  transition:opacity 1.5s ease, transform 1.5s ease;
+  /* strong dark shadow so text is readable over any effect */
+  text-shadow:
+    0 0 30px rgba(0,0,0,1),
+    0 0 60px rgba(0,0,0,1),
+    2px 2px 8px rgba(0,0,0,1);
+  max-width:780px;
+}
+
+.poem-line.in  { opacity:1; transform:translateY(0); }
+.poem-line.out {
+  opacity:0;
+  transform:translateY(-12px);
+  transition:opacity 1.3s ease, transform 1.3s ease;
+}
+
+
+
+#endscreen {
+  position:absolute;
+  top:0; left:0;
+  width:100%; height:100%;
+  z-index:10;
+  background:#080810;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 3s ease;
+}
+
+#endscreen p {
+  font-family:Georgia, 'Times New Roman', serif;
+  font-size:clamp(12px, 1.5vw, 16px);
+  font-weight:normal;
+  letter-spacing:0.24em;
+  color:rgba(242,237,228,0.25);
+  text-transform:uppercase;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg"></canvas>
+  <canvas id="fx"></canvas>
+  <div id="poem"></div>
+</div>
+
+
+
+<div id="endscreen"><p>be here</p></div>
+
+<script>
+// ── utils ────────────────────────────────────────────────────────────────────
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ease  = t  => t < .5 ? 2*t*t : -1+(4-2*t)*t;
+
+// ── canvas ───────────────────────────────────────────────────────────────────
+const bgC = document.getElementById('bg');
+const fxC = document.getElementById('fx');
+const bg  = bgC.getContext('2d');
+const fx  = fxC.getContext('2d');
+
+function setSize() {
+  bgC.width = fxC.width = W();
+  bgC.height = fxC.height = H();
+}
+setSize();
+// No resize listener — avoids mid-animation canvas reset
+
+// ── poem lines ───────────────────────────────────────────────────────────────
+const LINES = [
+  { t:"What if it all went away?",                              e:"flash",     d:5000 },
+  { t:"What would you change in your life today?",              e:"dots",      d:5000 },
+  { t:"Would you laugh a little harder?",                       e:"ripple",    d:4500 },
+  { t:"Or sing a little louder?",                               e:"wave",      d:4500 },
+  { t:"Would you run out in the rain?",                         e:"rain",      d:5500 },
+  { t:"Or learn to fly a plane?",                               e:"plane",     d:5500 },
+  { t:"Would you look back and regret",                         e:"ghosts",    d:4500 },
+  { t:"The things you never said?",                             e:"ghosts",    d:5000 },
+  { t:"Or would you be glad to recall",                         e:"glow",      d:4500 },
+  { t:"That you always gave it your all?",                      e:"glow",      d:5000 },
+  { t:"You see,",                                               e:"still",     d:4500 },
+  { t:"It's hard to really know",                               e:"river",     d:4000 },
+  { t:"Where your life will go",                                e:"river",     d:4000 },
+  { t:"All you really know",                                    e:"river",     d:4000 },
+  { t:"Is your current flow",                                   e:"river",     d:5000 },
+  { t:"So love a little harder,",                               e:"beat",      d:5000 },
+  { t:"Leave your mark on everyone's heart",                    e:"beat",      d:5500 },
+  { t:"Postpone your burnout,",                                 e:"ember",     d:4500 },
+  { t:"don't ignore the smallest spark.",                       e:"ember",     d:5000 },
+  { t:"Say yes a little faster,",                               e:"yesno",     d:5000 },
+  { t:"before almost becomes your art",                         e:"yesno",     d:5000 },
+  { t:"If nothing was promised, not tomorrow, not time",        e:"vignette",  d:5500 },
+  { t:"Would you still be saving your life for a better time?", e:"vignette",  d:5500 },
+  { t:"You can't freeze the moment,",                           e:"clock",     d:4500 },
+  { t:"but you can step inside it.",                            e:"clock",     d:5000 },
+  { t:"Notice where you are",                                   e:"zoom",      d:4500 },
+  { t:"instead of where you're headed",                         e:"zoom",      d:5000 },
+  { t:"Because time isn't lost all at once",                    e:"waveout",   d:5500 },
+  { t:"it slips, unnoticed,",                                   e:"waveout",   d:5000 },
+  { t:"like a song you love playing softly,",                   e:"sig",       d:5500 },
+  { t:"while you're focused on something else.",                e:"ending",    d:10000},
+];
+
+// ── background ───────────────────────────────────────────────────────────────
+let bgP = 0; // 0=cool navy, 1=warm dark
+
+function drawBg(p) {
+  p = Math.max(0, Math.min(1, p));
+  const r = Math.round(8  + p*14);
+  const g = Math.round(8  + p*5);
+  const b = Math.round(16 - p*10);
+  bg.fillStyle = `rgb(${r},${g},${b})`;
+  bg.fillRect(0, 0, W(), H());
+}
+
+// ── effect state ─────────────────────────────────────────────────────────────
+let eff    = null;
+let effT0  = 0;
+let effD   = {};
+
+// Particle pools — capped sizes to prevent memory bloat
+let dots   = [];   // generic float particles, max 60
+let rain   = [];   // raindrops, max 50
+let riverP = [];   // river points, persistent
+
+const MAX_DOTS = 60;
+const MAX_RAIN = 50;
+
+function startEff(name) {
+  const same = (name === eff);
+  eff = name;
+  if (!same) {
+    effT0 = Date.now();
+    effD  = {};
+    dots.length = 0;
+  }
+  if (name === 'rain' && rain.length === 0) {
+    for (let i = 0; i < MAX_RAIN; i++) {
+      rain.push({ x: Math.random()*W(), y: Math.random()*H(),
+                  spd: 4+Math.random()*5, len: 12+Math.random()*18,
+                  a: 0.08+Math.random()*0.22 });
+    }
+  }
+  if (name !== 'rain') rain.length = 0;
+  if (name === 'river' && riverP.length === 0) {
+    for (let i = 0; i < 40; i++) {
+      riverP.push({ x: Math.random()*W(),
+                    y: H()*0.6+(Math.random()-.5)*60,
+                    spd: .4+Math.random()*.8,
+                    sz: 1+Math.random()*2,
+                    a: .1+Math.random()*.25,
+                    ph: Math.random()*Math.PI*2 });
+    }
+  }
+  if (name !== 'river') riverP.length = 0;
+}
+
+// ── draw effects ─────────────────────────────────────────────────────────────
+function drawEff() {
+  const t = (Date.now() - effT0) / 1000;
+  fx.clearRect(0, 0, W(), H());
+  if (!eff) return;
+
+  fx.save();
+  fx.globalAlpha = 1;
+  fx.setLineDash([]);
+
+  try {
+    switch (eff) {
+
+      case 'flash': {
+        const a = Math.max(0, .1 - t*.045);
+        if (a > 0) { fx.fillStyle=`rgba(255,255,255,${a})`; fx.fillRect(0,0,W(),H()); }
+        break;
+      }
+
+      case 'dots': {
+        // Slow upward drifting dots — small pool, capped
+        if (dots.length < MAX_DOTS && t < 3 && Math.random() < .3) {
+          dots.push({ x:W()/2+(Math.random()-.5)*400, y:H()/2+(Math.random()-.5)*40,
+                      vx:(Math.random()-.5)*.9, vy:-.4-Math.random()*1.2,
+                      life:1, dec:.006+Math.random()*.005, sz:1+Math.random()*2 });
+        }
+        for(let i=dots.length-1;i>=0;i--){ if(dots[i].life<=0) dots.splice(i,1); }
+        dots.forEach(p=>{
+          p.x+=p.vx; p.y+=p.vy; p.life-=p.dec;
+          fx.beginPath(); fx.arc(p.x,p.y,p.sz,0,Math.PI*2);
+          fx.fillStyle=`rgba(245,220,190,${p.life*.5})`; fx.fill();
+        });
+        break;
+      }
+
+      case 'ripple': {
+        [0,.8,1.6].forEach(off=>{
+          const rt = (t-off)%2.5; if(rt<=0) return;
+          const a = Math.max(0,.2-rt*.08);
+          fx.beginPath(); fx.arc(W()/2,H()/2,rt*120,0,Math.PI*2);
+          fx.strokeStyle=`rgba(245,230,200,${a})`; fx.lineWidth=1; fx.stroke();
+        });
+        break;
+      }
+
+      case 'wave': {
+        const by = H()*.72;
+        fx.beginPath(); fx.moveTo(0,by);
+        for(let x=0;x<=W();x+=5){
+          fx.lineTo(x, by+Math.sin((x/W())*Math.PI*8+t*2.5)*16
+                      +Math.sin((x/W())*Math.PI*3+t*1.2)*6);
+        }
+        fx.strokeStyle='rgba(245,220,175,.2)'; fx.lineWidth=1.5; fx.stroke();
+        break;
+      }
+
+      case 'rain': {
+        // Lightweight — 50 drops, no particle system
+        fx.lineWidth=.7;
+        rain.forEach(d=>{
+          d.y += d.spd;
+          if(d.y > H()+20){ d.y=-20; d.x=Math.random()*W(); }
+          fx.globalAlpha = d.a;
+          fx.strokeStyle = 'rgba(190,215,240,1)';
+          fx.beginPath(); fx.moveTo(d.x,d.y); fx.lineTo(d.x-1,d.y-d.len); fx.stroke();
+        });
+        fx.globalAlpha = 1;
+        break;
+      }
+
+      case 'plane': {
+        const pt = Math.min(t/3.8, 1);
+        const e2 = ease(pt);
+        const x0=-50, y0=H()*.72, x1=W()*.45, y1=H()*.22, x2=W()+70, y2=H()*.38;
+        const px=(1-e2)*(1-e2)*x0+2*(1-e2)*e2*x1+e2*e2*x2;
+        const py=(1-e2)*(1-e2)*y0+2*(1-e2)*e2*y1+e2*e2*y2;
+        const ang=Math.atan2(
+          2*e2*(y2-y1)+2*(1-e2)*(y1-y0),
+          2*e2*(x2-x1)+2*(1-e2)*(x1-x0)
+        );
+        // Trail
+        fx.save(); fx.setLineDash([4,7]);
+        fx.strokeStyle='rgba(245,230,210,.09)'; fx.lineWidth=1;
+        fx.beginPath();
+        for(let s=0;s<=e2;s+=.02){
+          const tx=(1-s)*(1-s)*x0+2*(1-s)*s*x1+s*s*x2;
+          const ty=(1-s)*(1-s)*y0+2*(1-s)*s*y1+s*s*y2;
+          s===0?fx.moveTo(tx,ty):fx.lineTo(tx,ty);
+        }
+        fx.stroke(); fx.restore();
+        if(pt<.99){
+          fx.save(); fx.translate(px,py); fx.rotate(ang);
+          fx.beginPath();
+          fx.moveTo(16,0); fx.lineTo(-8,-6); fx.lineTo(-4,0); fx.lineTo(-8,6);
+          fx.closePath(); fx.fillStyle='rgba(245,240,230,.8)'; fx.fill();
+          fx.beginPath();
+          fx.moveTo(2,0); fx.lineTo(-6,-13); fx.lineTo(-10,0); fx.lineTo(-6,13);
+          fx.closePath(); fx.fillStyle='rgba(245,240,230,.42)'; fx.fill();
+          fx.restore();
+        }
+        break;
+      }
+
+
+
+      // ── shattered letters ────────────────────────────────────────────────────
+      case 'ghosts': {
+        // Initialise or replenish when all fragments have decayed
+        if(!effD.frags || effD.frags.length === 0){
+          const words=["I love you","I'm sorry","thank you","I miss you","forgive me","stay"];
+          if(!effD.frags) effD.frags=[];
+          words.forEach(w=>{
+            const sx=W()/2+(Math.random()-.5)*W()*.45;
+            const sy=H()/2+(Math.random()-.5)*H()*.35;
+            w.split('').forEach((ch,ci)=>{
+              effD.frags.push({ch,x:sx+ci*18,y:sy,
+                vx:(Math.random()-.5)*2.5,vy:(Math.random()-.5)*2,
+                rot:0,rotV:(Math.random()-.5)*.08,
+                life:1,dec:.003+Math.random()*.002,
+                sz:Math.round(Math.max(14,W()*.018))});
+            });
+          });
+        }
+        const sz=effD.frags[0]?effD.frags[0].sz:16;
+        fx.font=`italic ${sz}px Georgia,serif`;
+        for(let i=effD.frags.length-1;i>=0;i--){
+          const f=effD.frags[i];
+          f.x+=f.vx; f.y+=f.vy; f.rot+=f.rotV; f.life-=f.dec;
+          if(f.life<=0){effD.frags.splice(i,1);continue;}
+          fx.save(); fx.globalAlpha=f.life*.65;
+          fx.translate(f.x,f.y); fx.rotate(f.rot);
+          fx.fillStyle='rgba(245,230,200,1)'; fx.fillText(f.ch,0,0);
+          fx.restore();
+        }
+        break;
+      }
+
+      // ── constellation ────────────────────────────────────────────────────────
+      case 'glow': {
+        if(!effD.stars){
+          effD.stars=[];
+          for(let i=0;i<22;i++){
+            const ang=Math.random()*Math.PI*2, r=80+Math.random()*180;
+            effD.stars.push({x:W()/2+Math.cos(ang)*r,y:H()/2+Math.sin(ang)*r,
+              sz:1.5+Math.random()*2.5,tw:Math.random()*Math.PI*2});
+          }
+        }
+        const appear=Math.min(t/1.5,1);
+        for(let i=0;i<effD.stars.length;i++){
+          for(let j=i+1;j<effD.stars.length;j++){
+            const a=effD.stars[i],b=effD.stars[j];
+            const d=Math.hypot(a.x-b.x,a.y-b.y);
+            if(d<160){
+              fx.beginPath(); fx.moveTo(a.x,a.y); fx.lineTo(b.x,b.y);
+              fx.strokeStyle=`rgba(245,220,160,${appear*(1-d/160)*.3})`;
+              fx.lineWidth=.8; fx.stroke();
+            }
+          }
+        }
+        effD.stars.forEach(s=>{
+          const tw=(Math.sin(t*2+s.tw)+1)/2;
+          fx.beginPath(); fx.arc(s.x,s.y,s.sz*(.7+tw*.6),0,Math.PI*2);
+          fx.fillStyle=`rgba(255,235,180,${appear*(.4+tw*.5)})`; fx.fill();
+        });
+        const pulse=(Math.sin(t*1.2)+1)/2;
+        const gr=fx.createRadialGradient(W()/2,H()/2,0,W()/2,H()/2,220+pulse*60);
+        gr.addColorStop(0,`rgba(255,200,80,${.05+pulse*.04})`);
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        break;
+      }
+
+      case 'still': break;
+
+      // ── breath ───────────────────────────────────────────────────────────────
+      case 'river': {
+        const breath=(Math.sin(t*.38*Math.PI*2-Math.PI/2)+1)/2;
+        const inner=W()*(.18+breath*.08), outer=W()*(.65+breath*.08);
+        const gr=fx.createRadialGradient(W()/2,H()/2,inner,W()/2,H()/2,outer);
+        gr.addColorStop(0,'rgba(0,0,0,0)');
+        gr.addColorStop(1,`rgba(0,0,0,${.45+breath*.2})`);
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        fx.beginPath(); fx.arc(W()/2,H()/2,W()*.22+breath*W()*.06,0,Math.PI*2);
+        fx.strokeStyle=`rgba(180,200,220,${.06+breath*.04})`; fx.lineWidth=1; fx.stroke();
+        break;
+      }
+
+      // ── heart: pulses from center with ghost rings ────────────────────────────
+      case 'beat': {
+        const cx=W()/2, cy=H()/2;
+        const beatT=t%1.2;
+        const be=beatT<.18?beatT/.18:Math.max(0,1-(beatT-.18)/1.02);
+        const s=Math.min(W(),H())*.052*(1+be*.22);
+        function heart(sc,ox,oy){
+          fx.beginPath();
+          fx.moveTo(cx+ox, cy+oy-sc*2.5);
+          fx.bezierCurveTo(cx+ox,cy+oy-sc*5, cx+ox-sc*5,cy+oy-sc*5, cx+ox-sc*5,cy+oy-sc*2.5);
+          fx.bezierCurveTo(cx+ox-sc*5,cy+oy, cx+ox,cy+oy+sc*3, cx+ox,cy+oy+sc*5);
+          fx.bezierCurveTo(cx+ox,cy+oy+sc*3, cx+ox+sc*5,cy+oy, cx+ox+sc*5,cy+oy-sc*2.5);
+          fx.bezierCurveTo(cx+ox+sc*5,cy+oy-sc*5, cx+ox,cy+oy-sc*5, cx+ox,cy+oy-sc*2.5);
+          fx.closePath();
+        }
+        // Background glow
+        const gr=fx.createRadialGradient(cx,cy,0,cx,cy,s*9);
+        gr.addColorStop(0,`rgba(210,50,70,${.07+be*.1})`);
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        // Ghost expanding hearts on beat
+        [.6,1.1,1.6].forEach((mul)=>{
+          const gs=s*(1+mul*be*1.6), ga=Math.max(0,be*.28*(1-mul*.5));
+          if(ga>.008){ heart(gs,0,0); fx.strokeStyle=`rgba(220,75,95,${ga})`; fx.lineWidth=1; fx.stroke(); }
+        });
+        // Filled heart
+        heart(s,0,0);
+        fx.fillStyle=`rgba(195,45,65,${.6+be*.28})`; fx.fill();
+        // Bright highlight edge
+        heart(s,0,0);
+        fx.strokeStyle=`rgba(255,140,155,${.35+be*.45})`; fx.lineWidth=1.5; fx.stroke();
+        break;
+      }
+
+      // ── vinyl record: spins with grooves and a label ─────────────────────────
+      case 'sig': {
+        const cx=W()/2, cy=H()/2;
+        const cr=Math.min(W(),H())*.28;
+        const spin=t*1.1; // rotation speed
+        fx.save(); fx.translate(cx,cy); fx.rotate(spin);
+        // Outer black disc
+        fx.beginPath(); fx.arc(0,0,cr,0,Math.PI*2);
+        fx.fillStyle='rgba(18,14,22,0.92)'; fx.fill();
+        fx.strokeStyle='rgba(245,230,200,.18)'; fx.lineWidth=1; fx.stroke();
+        // Grooves — concentric rings
+        for(let r=cr*.38;r<cr*.96;r+=cr*.045){
+          fx.beginPath(); fx.arc(0,0,r,0,Math.PI*2);
+          fx.strokeStyle=`rgba(60,50,75,${.5+Math.sin(r)*.2})`; fx.lineWidth=.7; fx.stroke();
+        }
+        // Highlight shimmer on groove (light reflection)
+        fx.beginPath(); fx.arc(0,0,cr*.7,0,Math.PI*2);
+        fx.strokeStyle='rgba(245,230,200,.06)'; fx.lineWidth=cr*.35; fx.stroke();
+        // Center label
+        fx.beginPath(); fx.arc(0,0,cr*.28,0,Math.PI*2);
+        fx.fillStyle='rgba(80,30,40,0.9)'; fx.fill();
+        fx.strokeStyle='rgba(200,150,120,.3)'; fx.lineWidth=1; fx.stroke();
+        // Label ring
+        fx.beginPath(); fx.arc(0,0,cr*.22,0,Math.PI*2);
+        fx.strokeStyle='rgba(200,150,120,.15)'; fx.lineWidth=1; fx.stroke();
+        // Center hole
+        fx.beginPath(); fx.arc(0,0,cr*.04,0,Math.PI*2);
+        fx.fillStyle='rgba(8,8,16,1)'; fx.fill();
+        fx.restore();
+        // Subtle glow beneath record
+        const gr=fx.createRadialGradient(cx,cy,cr*.2,cx,cy,cr*1.3);
+        gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.45)');
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        break;
+      }
+
+      // ── ember: bigger brighter sparks ────────────────────────────────────────
+      case 'ember': {
+        if(dots.length<MAX_DOTS && Math.random()<.18){
+          const hue=15+Math.random()*40;
+          dots.push({x:W()*.3+Math.random()*W()*.4,y:H()*.78,
+            vx:(Math.random()-.5)*1.8,vy:-1.2-Math.random()*2.5,
+            life:1,dec:.005+Math.random()*.004,sz:3+Math.random()*5,
+            r:255,g:Math.round(120+hue*2)});
+        }
+        for(let i=dots.length-1;i>=0;i--){ if(dots[i].life<=0) dots.splice(i,1); }
+        dots.forEach(p=>{
+          p.x+=p.vx+Math.sin(Date.now()*.001+p.y*.01)*.4;
+          p.y+=p.vy; p.life-=p.dec;
+          const gr=fx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.sz*2.5);
+          gr.addColorStop(0,`rgba(${p.r},${p.g},40,${p.life*.9})`);
+          gr.addColorStop(1,'rgba(0,0,0,0)');
+          fx.beginPath(); fx.arc(p.x,p.y,p.sz*2.5,0,Math.PI*2);
+          fx.fillStyle=gr; fx.fill();
+          fx.beginPath(); fx.arc(p.x,p.y,p.sz*.6,0,Math.PI*2);
+          fx.fillStyle=`rgba(255,240,200,${p.life})`; fx.fill();
+        });
+        break;
+      }
+
+      // ── typewriter crossout ──────────────────────────────────────────────────
+      case 'yesno': {
+        const sz=Math.round(Math.max(18,W()*.028));
+        fx.font=`italic ${sz}px Georgia,serif`; fx.textAlign='center';
+        const almostW=fx.measureText('almost').width;
+        const p1=2.0,p2=3.2,p3=4.5;
+        if(t<p1){
+          const revealed=Math.floor((t/p1)*6);
+          fx.fillStyle='rgba(245,230,200,.6)';
+          fx.fillText('almost'.slice(0,revealed),W()/2,H()*.74);
+        } else if(t<p2){
+          fx.fillStyle='rgba(245,230,200,.5)';
+          fx.fillText('almost',W()/2,H()*.74);
+          const prog=Math.min((t-p1)/(p2-p1),1);
+          fx.beginPath();
+          fx.moveTo(W()/2-almostW/2,H()*.74-sz*.35);
+          fx.lineTo(W()/2-almostW/2+almostW*prog,H()*.74-sz*.35);
+          fx.strokeStyle='rgba(220,100,100,.85)'; fx.lineWidth=2; fx.stroke();
+        } else if(t<p3){
+          const fo=Math.max(0,1-(t-p2)/(p3-p2)), fi=Math.min((t-p2)/(p3-p2),1);
+          fx.fillStyle=`rgba(245,230,200,${fo*.4})`; fx.fillText('almost',W()/2,H()*.74);
+          fx.strokeStyle=`rgba(220,100,100,${fo*.7})`; fx.lineWidth=2;
+          fx.beginPath();
+          fx.moveTo(W()/2-almostW/2,H()*.74-sz*.35);
+          fx.lineTo(W()/2+almostW/2,H()*.74-sz*.35); fx.stroke();
+          fx.fillStyle=`rgba(245,230,200,${fi*.7})`; fx.fillText('yes',W()/2,H()*.74);
+        } else {
+          fx.fillStyle='rgba(245,230,200,.55)'; fx.fillText('yes',W()/2,H()*.74);
+        }
+        fx.textAlign='left';
+        break;
+      }
+
+      // ── ice crystals: snowflake shards grow and freeze across screen ──────────
+      case 'clock': {
+        if(!effD.crystals){
+          effD.crystals=[];
+          const origins=[
+            {x:W()/2,y:H()/2},
+            {x:W()*.3,y:H()*.35},{x:W()*.7,y:H()*.35},
+            {x:W()*.25,y:H()*.65},{x:W()*.75,y:H()*.65},
+            {x:W()*.5,y:H()*.22},{x:W()*.5,y:H()*.78}
+          ];
+          origins.forEach(o=>{
+            for(let a=0;a<6;a++){
+              const angle=a/6*Math.PI*2+Math.random()*.15;
+              const len=30+Math.random()*Math.min(W(),H())*.12;
+              effD.crystals.push({ox:o.x,oy:o.y,angle,len,
+                delay:Math.random()*1.8,grow:0});
+            }
+          });
+        }
+        const appear=Math.min(t/4,1);
+        effD.crystals.forEach(c=>{
+          const localT=Math.max(0,t-c.delay);
+          c.grow=Math.min(localT/1.2,1);
+          if(c.grow<=0) return;
+          const ex=c.ox+Math.cos(c.angle)*c.len*c.grow;
+          const ey=c.oy+Math.sin(c.angle)*c.len*c.grow;
+          const alpha=appear*.55;
+          fx.beginPath(); fx.moveTo(c.ox,c.oy); fx.lineTo(ex,ey);
+          fx.strokeStyle=`rgba(180,220,245,${alpha})`; fx.lineWidth=1; fx.stroke();
+          [.35,.65].forEach(frac=>{
+            const bx=c.ox+Math.cos(c.angle)*c.len*frac;
+            const by=c.oy+Math.sin(c.angle)*c.len*frac;
+            const blen=c.len*.35;
+            const bGrow=Math.max(0,(c.grow-.2)/.8);
+            [-1,1].forEach(side=>{
+              const bang=c.angle+side*Math.PI/3;
+              fx.beginPath(); fx.moveTo(bx,by);
+              fx.lineTo(bx+Math.cos(bang)*blen*bGrow,by+Math.sin(bang)*blen*bGrow);
+              fx.strokeStyle=`rgba(200,230,250,${alpha*.8})`; fx.lineWidth=.7; fx.stroke();
+            });
+          });
+          if(c.grow>.9){
+            fx.beginPath(); fx.arc(ex,ey,1.5,0,Math.PI*2);
+            fx.fillStyle=`rgba(230,245,255,${alpha})`; fx.fill();
+          }
+        });
+        const gr=fx.createRadialGradient(W()/2,H()/2,W()*.1,W()/2,H()/2,W()*.7);
+        gr.addColorStop(0,'rgba(0,0,0,0)');
+        gr.addColorStop(1,`rgba(5,10,30,${appear*.5})`);
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        break;
+      }
+
+      // ── spotlight ────────────────────────────────────────────────────────────
+      case 'vignette': {
+        const progress=Math.min(t/3.5,1);
+        const inner=Math.max(10,W()*(.38-progress*.18));
+        const outer=W()*(.72-progress*.1);
+        const gr=fx.createRadialGradient(W()/2,H()/2,inner,W()/2,H()/2,outer);
+        gr.addColorStop(0,'rgba(0,0,0,0)');
+        gr.addColorStop(.7,`rgba(0,0,0,${.35+progress*.2})`);
+        gr.addColorStop(1,`rgba(0,0,0,${.7+progress*.2})`);
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        break;
+      }
+
+      // ── starfield ────────────────────────────────────────────────────────────
+      case 'zoom': {
+        if(!effD.stars){
+          effD.stars=[];
+          for(let i=0;i<60;i++)
+            effD.stars.push({x:(Math.random()-.5)*W()*2,y:(Math.random()-.5)*H()*2,
+              z:Math.random()*W(),spd:.4+Math.random()*.8});
+        }
+        effD.stars.forEach(s=>{
+          s.z-=s.spd*3; if(s.z<=0) s.z=W();
+          const sx=W()/2+s.x/s.z*W()*.5, sy=H()/2+s.y/s.z*H()*.5;
+          const r=Math.max(.5,(1-s.z/W())*3), a=Math.max(0,(1-s.z/W())*.8);
+          if(sx>0&&sx<W()&&sy>0&&sy<H()){
+            fx.beginPath(); fx.arc(sx,sy,r,0,Math.PI*2);
+            fx.fillStyle=`rgba(245,235,215,${a})`; fx.fill();
+          }
+        });
+        const gr=fx.createRadialGradient(W()/2,H()/2,W()*.15,W()/2,H()/2,W()*.7);
+        gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.55)');
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        break;
+      }
+
+      // ── waveout: bigger amplitude ────────────────────────────────────────────
+      case 'waveout': {
+        const amp=Math.max(0,1-t*.15), by=H()*.73;
+        fx.beginPath(); fx.moveTo(0,by);
+        for(let x=0;x<=W();x+=4)
+          fx.lineTo(x,by+Math.sin((x/W())*Math.PI*12+t*1.5)*28*amp);
+        fx.strokeStyle=`rgba(245,220,175,${.35*amp})`; fx.lineWidth=1.5; fx.stroke();
+        fx.beginPath(); fx.moveTo(0,by);
+        for(let x=0;x<=W();x+=4)
+          fx.lineTo(x,by+Math.sin((x/W())*Math.PI*7+t*2.2)*14*amp);
+        fx.strokeStyle=`rgba(245,220,175,${.18*amp})`; fx.lineWidth=1; fx.stroke();
+        break;
+      }
+
+      case 'ending': {
+        const fa=Math.min(t/6,1);
+        const gr=fx.createRadialGradient(W()/2,H()/2,W()*.07,W()/2,H()/2,W()*.75);
+        gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,`rgba(0,0,0,${.4+fa*.6})`);
+        fx.fillStyle=gr; fx.fillRect(0,0,W(),H());
+        const wa=Math.max(0,1-t*.13), wy=H()*.72;
+        if(wa>0){
+          fx.beginPath(); fx.moveTo(0,wy);
+          for(let x=0;x<=W();x+=4)
+            fx.lineTo(x,wy+Math.sin((x/W())*Math.PI*14+t*1.1)*7*wa);
+          fx.strokeStyle=`rgba(245,220,175,${.1*wa})`; fx.lineWidth=1; fx.stroke();
+        }
+        break;
+      }
+    }
+  } catch(err) {
+    console.warn('effect err (non-fatal):', err);
+  }
+  fx.restore();
+}
+
+// ── text display ─────────────────────────────────────────────────────────────
+const poemDiv = document.getElementById('poem');
+let curEl=null, curWrap=null;
+
+function fadeOut() {
+  return new Promise(resolve=>{
+    if(!curEl){ resolve(); return; }
+    curEl.classList.remove('in');
+    curEl.classList.add('out');
+    const w=curWrap;
+    curEl=null; curWrap=null;
+    setTimeout(()=>{ if(w&&w.parentElement) w.remove(); resolve(); }, 1400);
+  });
+}
+
+async function showLine(line) {
+  await fadeOut();
+  const wrap=document.createElement('div'); wrap.className='line-wrap';
+  const el=document.createElement('div'); el.className='poem-line';
+  el.textContent=line.t;
+  wrap.appendChild(el); poemDiv.appendChild(wrap);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add('in')));
+  curEl=el; curWrap=wrap;
+}
+
+// ── main loop ────────────────────────────────────────────────────────────────
+let running=false;
+
+function tick() {
+  drawBg(bgP);
+  drawEff();
+  if(running) requestAnimationFrame(tick);
+}
+
+async function run() {
+  running=true;
+  requestAnimationFrame(tick);
+  for(let i=0;i<LINES.length;i++){
+    const line=LINES[i];
+    bgP=i/(LINES.length-1);
+    await showLine(line);
+    startEff(line.e);
+    await sleep(Math.max(800, line.d-1400));
+  }
+  await fadeOut();
+  eff=null; fx.clearRect(0,0,W(),H());
+  await sleep(1600);
+  const e=document.getElementById('endscreen');
+  e.style.opacity='1'; e.style.pointerEvents='all';
+  running=false;
+}
+
+// ── entry ────────────────────────────────────────────────────────────────────
+// Auto-start after a brief moment
+window.addEventListener('load', () => {
+  setSize();
+  drawBg(0);
+  setTimeout(() => { run(); }, 800);
+});
+</script>
+</body>
+</html>
